@@ -21,21 +21,13 @@
     SOFTWARE.
 */
 
-#pragma config WDTE = OFF     /*disable Watchdog*/
-#pragma config LVP = ON  /* Low voltage programming enabled, RE3 pin is MCLR */
+/*disable Watchdog*/
+#pragma config WDTE = OFF
+/* Low voltage programming enabled, RE3 pin is MCLR */
+#pragma config LVP = ON  
 
 #include <xc.h>
 #include <stdint.h>
-
-/*channel number that connects to VSS*/
-#define DISCHARGE_SAMPLE_CAP                0x3C
-/*channel number that connects to RA0*/
-#define ANALOG_CHANNEL                      0x00
-#define UPPER_THRESHOLD                     35   
-#define LOWER_THRESHOLD                     -35   
-#define NUMBER_OF_REPETITIONS               16    /*maximum 255 repetitions*/
-#define FOSC_DIVIDED_128                    0x3F
-#define FRQ_1MHZ                             0x00
 
 static void CLK_init(void);
 static void PORT_init(void);
@@ -43,94 +35,104 @@ static void ADCC_init(void);
 static void ADCC_dischargeSampleCap(void);
 static void INTERRUPT_init(void);
 static void ADCC_startConversion(uint8_t channel);
-static void ADCC_ThresholdISR(void);
+static void ADCC_thresholdISR(void);
 void __interrupt() INTERRUPT_InterruptManager(void);
 
 uint16_t volatile errVal;
 
 static void CLK_init(void)
 {
-    /* select HFINTOSC */
-        OSCCON1 = _OSCCON1_NOSC1_MASK | _OSCCON1_NOSC2_MASK 
+    /* set HFINTOSC Oscillator */
+    OSCCON1bits.NOSC = 6;
     /* clk divided by 4 */            
-                | _OSCCON1_NDIV2_MASK;  
-        OSCFRQ = FRQ_1MHZ;
+    OSCCON1bits.NDIV = 4;
+    /* set HFFRQ to 1 MHz */
+    OSCFRQbits.HFFRQ = 0;
 }
 
 static void PORT_init(void)
 {
-    ANSELA |= _ANSELA_ANSELA0_MASK;       /*set pin RA0 as analog*/
-    TRISA |= _TRISA_TRISA0_MASK;          /*set pin RA0 as input*/
+    /*set pin RA0 as analog*/
+    ANSELAbits.ANSELA0 = 1;
+    /*set pin RA0 as input*/
+    TRISAbits.TRISA0 = 1;  
 }
 
 
 static void ADCC_init(void) 
 {
-    ADCON0 = _ADCON0_ADON_MASK     /*enable ADCC module*/
-           | _ADCON0_ADCONT_MASK   /*enable continuous operation*/
-           | _ADCON0_ADFM_MASK;    /*result right justified*/
-    ADCLK = FOSC_DIVIDED_128;
-    
-    ADRPT = NUMBER_OF_REPETITIONS;
+    /* Enable the ADCC module */
+    ADCON0bits.ADON = 1; 
+    /* Enable continuous operation*/
+    ADCON0bits.ADCONT = 1;
+    /* result right justified */
+    ADCON0bits.ADFM = 1;
+    /*FOSC divided by 128*/
+    ADCLKbits.ADCS = 63;    
+    ADRPT = 16;
     
     /*clear status bits on overflow enabled (this setting prevents overflow 
     interrupts that  trigger the same interrupt as the threshold interrupt)*/
-    ADCON2 = _ADCON2_ADACLR_MASK 
-            /* Average mode */
-            | _ADCON2_ADMD1_MASK
-            /*result is right shifted by 16*/
-            | _ADCON2_ADCRS2_MASK;  
+    ADCON2bits.ADACLR = 1;  
+    /* Average mode */
+    ADCON2bits.ADMD = 2;
+    /*result is right shifted by 16*/
+    ADCON2bits.ADCRS = 4; 
     /* mode: error bigger than upper threshold
          or lower than lower threshold*/
-    ADCON3 = _ADCON3_ADTMD2_MASK;  
-    /*this register also selects the error calculation method which is the 
+    ADCON3bits.ADTMD = 4;  
+    /*error calculation method:  
       difference between the last result and the current result*/
-
-    ADUTH = UPPER_THRESHOLD;
-    ADLTH = LOWER_THRESHOLD; 
+    ADCON3bits.ADCALC = 0;
+    /*upper threshold*/
+    ADUTH = 35;
+    /*lower threshold*/
+    ADLTH = -35; 
  
-    
-    PIR1 &= (~_PIR1_ADTIF_MASK);  /* Clear the ADC Threshold interrupt flag */
-    PIE1 |= _PIE1_ADTIE_MASK;     /* Enable ADCC threshold interrupt*/
-    
-
+    /* Clear the ADC Threshold interrupt flag */   
+    PIR1bits.ADTIF = 0;  
+    /* Enable ADCC threshold interrupt*/
+    PIE1bits.ADTIE = 1;    
 }
 
 static void ADCC_dischargeSampleCap(void)
 {
-    ADPCH = DISCHARGE_SAMPLE_CAP;
+    /*channel number that connects to VSS*/
+    ADPCH = 0x3C;
 }
 
 static void INTERRUPT_init(void)
 {
-    INTCON |= _INTCON_GIE_MASK     /* Enable global interrupts */
-            | _INTCON_PEIE_MASK;   /* Enable peripheral interrupts */
+    /* Enable global interrupts */
+    INTCONbits.GIE = 1;
+    /* Enable peripheral interrupts */    
+    INTCONbits.PEIE = 1;   
 }
 
 static void ADCC_startConversion(uint8_t channel) 
 {
     ADPCH = channel;
-    
-    ADCON0 |= _ADCON0_ADGO_MASK;  /* Start the conversion */
+    /* Start the conversion */
+    ADCON0bits.ADGO = 1;  
 }
 
-static void ADCC_ThresholdISR(void)
+static void ADCC_thresholdISR(void)
 {
-    /*clear interrupt flag*/
-    PIR1 &= (~_PIR1_ADTIF_MASK);
     /*read the error*/
     errVal =  ((ADERRH << 8) + ADERRL);
+    /*clear interrupt flag*/
+    PIR1bits.ADTIF = 0;
 }
 
 
 void __interrupt() INTERRUPT_InterruptManager(void) 
 {
-    if (INTCON & _INTCON_PEIE_MASK) 
+    if (INTCONbits.PEIE) 
     {
-        if ((PIE1 & _PIE1_ADTIE_MASK) && (PIR1 & _PIR1_ADTIF_MASK))
+        if ((PIE1bits.ADTIE) && (PIR1bits.ADTIF))
             
         {
-            ADCC_ThresholdISR();
+            ADCC_thresholdISR();
         }
     }
 }
@@ -138,17 +140,13 @@ void __interrupt() INTERRUPT_InterruptManager(void)
 void main(void)
 {
     CLK_init();
-
-    PORT_init();
-    
+    PORT_init();   
     ADCC_init();
-    
     ADCC_dischargeSampleCap();
-    
     INTERRUPT_init();
-        
-    ADCC_startConversion(ANALOG_CHANNEL);
-
+    
+    /*channel number that connects to RA0*/    
+    ADCC_startConversion(0x00);
     while (1) 
     {
         ;
