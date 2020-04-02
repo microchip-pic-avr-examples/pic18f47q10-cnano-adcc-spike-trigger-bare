@@ -29,18 +29,18 @@
 #include <xc.h>
 #include <stdint.h>
 
-static void CLK_init(void);
-static void PORT_init(void);
-static void ADCC_init(void);
-static void ADCC_dischargeSampleCap(void);
-static void INTERRUPT_init(void);
-static void ADCC_startConversion(uint8_t channel);
-static void ADCC_thresholdISR(void);
+static void CLK_Init(void);
+static void PORT_Init(void);
+static void ADCC_Init(void);
+static void ADCC_DischargeSampleCap(void);
+static void INTERRUPT_Init(void);
+static void ADCC_StartConversion(uint8_t channel);
+static void ADCC_ThresholdISR(void);
 void __interrupt() INTERRUPT_InterruptManager(void);
 
 uint16_t volatile errVal;
 
-static void CLK_init(void)
+static void CLK_Init(void)
 {
     /* set HFINTOSC Oscillator */
     OSCCON1bits.NOSC = 6;
@@ -50,7 +50,7 @@ static void CLK_init(void)
     OSCFRQbits.HFFRQ = 0;
 }
 
-static void PORT_init(void)
+static void PORT_Init(void)
 {
     /*set pin RA0 as analog*/
     ANSELAbits.ANSELA0 = 1;
@@ -59,7 +59,7 @@ static void PORT_init(void)
 }
 
 
-static void ADCC_init(void) 
+static void ADCC_Init(void) 
 {
     /* Enable the ADCC module */
     ADCON0bits.ADON = 1; 
@@ -95,13 +95,13 @@ static void ADCC_init(void)
     PIE1bits.ADTIE = 1;    
 }
 
-static void ADCC_dischargeSampleCap(void)
+static void ADCC_DischargeSampleCap(void)
 {
     /*channel number that connects to VSS*/
     ADPCH = 0x3C;
 }
 
-static void INTERRUPT_init(void)
+static void INTERRUPT_Init(void)
 {
     /* Enable global interrupts */
     INTCONbits.GIE = 1;
@@ -109,14 +109,14 @@ static void INTERRUPT_init(void)
     INTCONbits.PEIE = 1;   
 }
 
-static void ADCC_startConversion(uint8_t channel) 
+static void ADCC_StartConversion(uint8_t channel) 
 {
     ADPCH = channel;
     /* Start the conversion */
     ADCON0bits.ADGO = 1;  
 }
 
-static void ADCC_thresholdISR(void)
+static void ADCC_ThresholdISR(void)
 {
     /*read the error*/
     errVal =  ((ADERRH << 8) + ADERRL);
@@ -132,21 +132,21 @@ void __interrupt() INTERRUPT_InterruptManager(void)
         if ((PIE1bits.ADTIE) && (PIR1bits.ADTIF))
             
         {
-            ADCC_thresholdISR();
+            ADCC_ThresholdISR();
         }
     }
 }
 
 void main(void)
 {
-    CLK_init();
-    PORT_init();   
-    ADCC_init();
-    ADCC_dischargeSampleCap();
-    INTERRUPT_init();
+    CLK_Init();
+    PORT_Init();   
+    ADCC_Init();
+    ADCC_DischargeSampleCap();
+    INTERRUPT_Init();
     
     /*channel number that connects to RA0*/    
-    ADCC_startConversion(0x00);
+    ADCC_StartConversion(0x00);
     while (1) 
     {
         ;
